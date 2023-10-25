@@ -16,17 +16,11 @@ from icons import get_icon, export_icons
 from globals import Shared
 
 
-async def closeWebsocket():
-    await Shared.lgsocket.close()
 
 def quit(tray):
     """Bailing"""
     Shared.save_prefs()
-    Shared.gameoverman = True
-    if Shared.lgsocket != None:
-      asyncio.run(closeWebsocket())
-    os._exit(0)
-    
+    Shared.wait_task.cancel()
 
 
 async def get_devices():
@@ -94,44 +88,42 @@ async def watch_battery():
                                   ) as websocket:
         
         try:
-            Shared.lgsocket = websocket
             logger.debug("Connected to LG Tray websocket")
             request = json.dumps(notifier_request)
             await websocket.send(request)
-            while websocket.closed == False:                
-                response = await websocket.recv()
-                if websocket.closed == False or response == None:
-                    continue
-                
-                message = json.loads(response)
-                logger.debug(f"Received: {message}")
+            done = False
+            while done == False:
+                Shared.wait_task = asyncio.create_task(websocket.recv())
+                try:
+                    await Shared.wait_task
+                    response = Shared.wait_task.result
+                    if websocket.closed == False or response == None:
+                        continue
+                    
+                    message = json.loads(response)
+                    logger.debug(f"Received: {message}")
 
-                if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
-                    charging = ''
-                    if message['payload']['charging'] == True:
-                        charging = ' (charging)'
-                    level = message['payload']['percentage']
-                    tooltip = f"{str(level)}%{charging}"
-                    icon = get_icon(level)
-                    logger.debug(f"Level={level}, Charging={
-                                message['payload']['charging']}, Icon={icon}")
-                    Shared.systray.update(hover_text=tooltip, icon=icon)
+                    if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
+                        charging = ''
+                        if message['payload']['charging'] == True:
+                            charging = ' (charging)'
+                        level = message['payload']['percentage']
+                        tooltip = f"{str(level)}%{charging}"
+                        icon = get_icon(level)
+                        logger.debug(f"Level={level}, Charging={
+                                    message['payload']['charging']}, Icon={icon}")
+                        Shared.systray.update(hover_text=tooltip, icon=icon)
+                except asyncio.CancelledError:
+                    logger.debug("await cancelled")
+                    done = True
                     
         except websockets.ConnectionClosedOK as ex:
             return
         
 if __name__ == '__main__':    
     Shared.load_prefs()
+    Shared.init_logging()
     
-    rootlogger = logging.getLogger()
-    rootlogger.setLevel(logging.WARNING)
-    rootlogger.handlers[0].level = logging.WARNING
-    
-    Shared.logger = logging.getLogger(Shared.appname)
-    Shared.logger.setLevel(logging.DEBUG)
-    Shared.logger.addHandler(logging.StreamHandler(stream=sys.stdout))
-    formatter = logging.Formatter(fmt='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
-    Shared.logger.handlers[0].setFormatter(formatter)    
     
     Shared.logger.debug('Started')
     export_icons()
@@ -144,14 +136,11 @@ if __name__ == '__main__':
 
     menu_options = tuple(options)
 
-        
-    
     Shared.systray = SysTrayIcon(get_icon(101), "...", menu_options=menu_options, on_quit=quit)
     Shared.systray.start()
-
-    if Shared.selected_device != '' and device.id == Shared.selected_device:
-        device.select(Shared.systray)
+    Shared.refresh_tray()
     
     asyncio.run(watch_battery())
     
     Shared.systray.shutdown()
+    sys.exit(0)
