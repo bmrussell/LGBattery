@@ -24,7 +24,10 @@ def quit(tray):
     Shared.save_prefs()
     Shared.gameoverman = True
     if Shared.lgsocket != None:
-         asyncio.run(closeWebsocket())
+      asyncio.run(closeWebsocket())
+    os._exit(0)
+    
+
 
 async def get_devices():
     """Get a list of devices from GHub by sending a /devices/list request to its websocket
@@ -49,10 +52,9 @@ async def get_devices():
                                 ) as websocket:
 
         logger.debug("Connected to LG Tray websocket")
-        while True:
-            
-            request = json.dumps(devices_request)
-            await websocket.send(request)
+        request = json.dumps(devices_request)
+        await websocket.send(request)
+        while True:            
             response = await websocket.recv()            
             message = json.loads(response)            
             if message['path'] == '/devices/list':
@@ -91,27 +93,30 @@ async def watch_battery():
                                   subprotocols=['json'],
                                   ) as websocket:
         
-        Shared.lgsocket = websocket
-        logger.debug("Connected to LG Tray websocket")
-        request = json.dumps(notifier_request)
-        await websocket.send(request)
         try:
+            Shared.lgsocket = websocket
+            logger.debug("Connected to LG Tray websocket")
+            request = json.dumps(notifier_request)
+            await websocket.send(request)
             while websocket.closed == False:                
                 response = await websocket.recv()
-                if websocket.closed == False and response != None:
-                    message = json.loads(response)
-                    logger.debug(f"Received: {message}")
+                if websocket.closed == False or response == None:
+                    continue
+                
+                message = json.loads(response)
+                logger.debug(f"Received: {message}")
 
-                    if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
-                        charging = ''
-                        if message['payload']['charging'] == True:
-                            charging = ' (charging)'
-                        level = message['payload']['percentage']
-                        tooltip = f"{str(level)}%{charging}"
-                        icon = get_icon(level)
-                        logger.debug(f"Level={level}, Charging={
-                                    message['payload']['charging']}, Icon={icon}")
-                        Shared.systray.update(hover_text=tooltip, icon=icon)
+                if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
+                    charging = ''
+                    if message['payload']['charging'] == True:
+                        charging = ' (charging)'
+                    level = message['payload']['percentage']
+                    tooltip = f"{str(level)}%{charging}"
+                    icon = get_icon(level)
+                    logger.debug(f"Level={level}, Charging={
+                                message['payload']['charging']}, Icon={icon}")
+                    Shared.systray.update(hover_text=tooltip, icon=icon)
+                    
         except websockets.ConnectionClosedOK as ex:
             return
         
@@ -150,4 +155,3 @@ if __name__ == '__main__':
     asyncio.run(watch_battery())
     
     Shared.systray.shutdown()
-    sys.exit()

@@ -19,6 +19,7 @@ class Shared:
     logger          = None
     gameoverman     = False
     lgsocket        = None
+    wait_task       = None
     
     def load_prefs(self):
         if not os.path.exists(Shared.datadir):
