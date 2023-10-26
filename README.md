@@ -5,7 +5,7 @@ System tray battery indicator for Windows Logitech devices. BECAUSE LOGITECH WON
 ![Screenshot](tray-screenshot.png)
 
 ## WHAT ITS DOING
-It uses the Python websockets library to watch for battry changed notifications from LG Hub - yeah, sorry, you'll still need that.
+It uses the Python websockets library to watch for battery changed notifications from LG Hub - yeah, sorry, you'll still need that.
 
 It puts an icon in the system tray after extracting the battery level icons it needs from `C:\Windows\SystemResources\wpdshext.dll.mun` These are saved in `%APPDATA%\lgbattery`.
 
@@ -23,9 +23,9 @@ Preferences are stored in `%APPDATA%\lgbattery\config.ini` as a regular INI file
 |Name|Description|
 |--|--|
 |`selected_device`|Logitech ID for the device being monitored. Updated by the application when item selected from system tray rigt click|
-|`level_file`|Path to a text file that the application will create/update when the battery level changes|
-|`log_level`|One of `DEBUG`, `INFO`, `WARNING` (default), `ERROR` or `CRITICAL` affecting the verbnosity of logging.|
-|`log_file`|If present, should point to a text file to receive the loging output. Otherwise logging is done to console|
+|`level_file`|Full path to a text file that the application will create/update when the battery level changes|
+|`log_level`|One of `DEBUG`, `INFO`, `WARNING` (default), `ERROR` or `CRITICAL` affecting the verbosity of logging.|
+|`log_file`|File name (no path) for a text file to receive the logging output. File is created in `%APPDATA%\lgbattery`. If not present, logging is done to console.|
 
 ## IMPROVEMENTS
 The selected device is not ticked (checked: US) when selected. This is a limitation of the `infi.systray` library so if they add that functionality there I'll update this program.

@@ -61,22 +61,42 @@ class Shared:
                 self.log_file = prefs['log_file']
             
             self.log_level = logging.WARNING
+            
             if 'log_level' in prefs:
-                level = prefs['log_level'].upper()
-                if level == 'DEBUG':
-                    self.log_level = logging.DEBUG
-                elif level == 'INFO':
-                    self.log_level = logging.INFO
-                elif level == 'ERROR':
-                    self.log_level = logging.ERROR
-                elif level == 'CRITICAL':
-                    self.log_level = logging.CRITICAL
-                
+                switch = {
+                    'DEBUG':logging.DEBUG,
+                    'INFO':logging.INFO,
+                    'WARNING':logging.WARNING,
+                    'ERROR':logging.ERROR,
+                    'CRITICAL':logging.CRITICAL
+                }
+                self.log_level = switch.get(prefs['log_level'].upper(), "Invalid")
+
+
     def save_prefs(self):
         config = configparser.ConfigParser()
+        
         if not config.has_section('PREFS'):
             config.add_section('PREFS')
+        
         config.set('PREFS', 'selected_device', self.selected_device)
+
+        if self.level_file != None:
+            config.set('PREFS', 'level_file', self.level_file)
+
+        if self.log_file != None:
+            config.set('PREFS', 'log_file', self.log_file)
+
+        switch = {
+            logging.DEBUG:'DEBUG',
+            logging.INFO:'INFO',
+            logging.WARNING:'WARNING',
+            logging.ERROR:'ERROR',
+            logging.CRITICAL:'CRITICAL'
+        }
+        log_level = switch.get(self.log_level, "Invalid")
+        config.set('PREFS', 'log_level', log_level)
+        
         with open(f'{self.datadir}\\config.ini', 'w') as configfile:
             config.write(configfile)
 
