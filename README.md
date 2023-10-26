@@ -28,7 +28,10 @@ Preferences are stored in `%APPDATA%\lgbattery\config.ini` as a regular INI file
 |`log_file`|File name (no path) for a text file to receive the logging output. File is created in `%APPDATA%\lgbattery`. If not present, logging is done to console.|
 
 ## IMPROVEMENTS
-The selected device is not ticked (checked: US) when selected. This is a limitation of the `infi.systray` library so if they add that functionality there I'll update this program.
+- The selected device is not ticked (checked: US) when selected. This is a limitation of the `infi.systray` library so if they add that functionality there I'll update this program.
+- Linting 
+- Security scan
+- GitHub Actions
 
 ## CREDITS
 Authors of all the libraries used (obviously) also @andyworld for [LGSTrayBattery](https://github.com/andyvorld/LGSTrayBattery/tree/master). I'd have just used that but it kept crashing for me, so I looked at the code as documentation for how to call the Logitech websockets API.
