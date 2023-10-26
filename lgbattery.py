@@ -11,7 +11,7 @@ import websockets
 from logging.config import dictConfig
 from infi.systray import SysTrayIcon
 
-from device import Device
+from device import Device, get_device
 from icons import get_icon, export_icons
 from globals import Shared
 
@@ -101,17 +101,29 @@ async def watch_battery():
                     if websocket.closed == False and response != None:                        
                         message = json.loads(response[0])
                         logger.debug(f"Received : {message}")
+                        
+                        if message['path'] != '/battery/state/changed':
+                            continue
+                            
+                        device = get_device(message['payload']['deviceId'])
+                        if None != device and device.id == Shared.selected_device:
 
-                        if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
-                            charging = ''
-                            if message['payload']['charging'] == True:
-                                charging = ' (charging)'
-                            level = message['payload']['percentage']
-                            tooltip = f"{str(level)}%{charging}"
-                            icon = get_icon(level)
-                            logger.debug(f"Level={level}, Charging={
-                                        message['payload']['charging']}, Icon={icon}")
+                            device.charging = message['payload']['charging']
+                            device.batteryLevel = message['payload']['percentage']
+                            
+                            if device.charging:
+                                tooltip = f'{device.name}: {str(device.batteryLevel)}% (charging)'
+                            else:
+                                tooltip = f'{device.name}: {str(device.batteryLevel)}%' 
+                            icon = get_icon(device.batteryLevel)
+                            
+                            logger.info(f"Level={device.batteryLevel}, Charging={device.charging}, Icon={icon}")
                             Shared.systray.update(hover_text=tooltip, icon=icon)
+
+                            if Shared.level_file != None:
+                                with open(Shared.level_file, 'w') as f:
+                                    f.write(str(device.batteryLevel))
+                                                                
                 except asyncio.CancelledError:
                     logger.debug("await cancelled")
                     done = True

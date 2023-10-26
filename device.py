@@ -1,8 +1,17 @@
 import asyncio
-import websockets
 import json
+import logging
+
+import websockets
+
 from globals import Shared
 from icons import get_icon
+
+
+def get_device(id):
+    for dev in Shared.devices:
+        if dev.id == id:
+            return dev
 
 class Device:
     def __init__(self, id, unitId, name, batteryLevel, charging):
@@ -49,6 +58,8 @@ class Device:
                     break
     
     def select(self, tray):
+        logger = logging.getLogger(Shared.appname)
+        logger.info(f'Selected {self.name}')
         Shared.selected_device = self.id
         asyncio.run(self.get_battery())
         if self.charging:
