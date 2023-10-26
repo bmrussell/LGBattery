@@ -91,28 +91,27 @@ async def watch_battery():
             logger.debug("Connected to LG Tray websocket")
             request = json.dumps(notifier_request)
             await websocket.send(request)
+            logger.debug(f"Sent request: {request}")
             done = False
             while done == False:
                 Shared.wait_task = asyncio.create_task(websocket.recv())
                 try:
-                    await Shared.wait_task
-                    response = Shared.wait_task.result
-                    if websocket.closed == False or response == None:
-                        continue
+                    response = await asyncio.gather(Shared.wait_task)
                     
-                    message = json.loads(response)
-                    logger.debug(f"Received: {message}")
+                    if websocket.closed == False and response != None:                        
+                        message = json.loads(response[0])
+                        logger.debug(f"Received : {message}")
 
-                    if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
-                        charging = ''
-                        if message['payload']['charging'] == True:
-                            charging = ' (charging)'
-                        level = message['payload']['percentage']
-                        tooltip = f"{str(level)}%{charging}"
-                        icon = get_icon(level)
-                        logger.debug(f"Level={level}, Charging={
-                                    message['payload']['charging']}, Icon={icon}")
-                        Shared.systray.update(hover_text=tooltip, icon=icon)
+                        if message['path'] == '/battery/state/changed' and message['payload']['deviceId'] == Shared.selected_device:
+                            charging = ''
+                            if message['payload']['charging'] == True:
+                                charging = ' (charging)'
+                            level = message['payload']['percentage']
+                            tooltip = f"{str(level)}%{charging}"
+                            icon = get_icon(level)
+                            logger.debug(f"Level={level}, Charging={
+                                        message['payload']['charging']}, Icon={icon}")
+                            Shared.systray.update(hover_text=tooltip, icon=icon)
                 except asyncio.CancelledError:
                     logger.debug("await cancelled")
                     done = True
