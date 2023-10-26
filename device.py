@@ -57,3 +57,7 @@ class Device:
             tooltip = f'{self.name}: {str(self.batteryLevel)}%' 
         icon = get_icon(self.batteryLevel)
         Shared.systray.update(hover_text=tooltip, icon=icon)
+        
+        if Shared.level_file != None:
+            with open(Shared.level_file, 'w') as f:
+                f.write(str(self.batteryLevel))

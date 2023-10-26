@@ -1,6 +1,10 @@
 # LGBATTERY
 
+System tray battery indicator for Windows Logitech devices. BECAUSE LOGITECH WON'T for some reason.
+
+
+
 ## Build
 ```powershell
-pyinstaller --onefile --icon "$Env:APPDATA\lgbattery\battery-81-100.ico" lgbattery.py
+pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile --noconsole .\lgbattery.py
 ```

@@ -24,6 +24,7 @@ class Shared:
     wait_task       = None
     log_level       = None
     log_file        = None
+    level_file      = None
 
     def init_logging(self):
         rootlogger = logging.getLogger()
@@ -52,6 +53,9 @@ class Shared:
         if prefs != None:
             if 'selected_device' in prefs:
                 self.selected_device = prefs['selected_device']
+
+            if 'level_file' in prefs:
+                self.level_file = prefs['level_file']
 
             if 'log_file' in prefs:
                 self.log_file = prefs['log_file']
