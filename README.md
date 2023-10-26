@@ -2,6 +2,8 @@
 
 System tray battery indicator for Windows Logitech devices. BECAUSE LOGITECH WON'T FOR SOME REASON.
 
+![Screenshot](tray-screenshot.png)
+
 ## WHAT ITS DOING
 It uses the Python websockets library to watch for battry changed notifications from LG Hub - yeah, sorry, you'll still need that.
 
