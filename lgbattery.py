@@ -101,8 +101,8 @@ async def watch_battery():
                 await websocket.send(request)
                 Shared.logger.debug(f"Sent request: {request}")
                 
-                Shared.wait_task = asyncio.create_task(websocket.recv())
                 try:
+                    Shared.wait_task = asyncio.create_task(websocket.recv())
                     response = await asyncio.gather(Shared.wait_task)
                     
                     if websocket.closed == False and response != None:                        
