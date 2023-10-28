@@ -8,10 +8,11 @@ from globals import Shared
 from icons import get_icon
 
 
-def get_device(id):
+def get_device_by_id(id):
     for dev in Shared.devices:
         if dev.id == id:
             return dev
+    return None
 
 class Device:
     def __init__(self, id, unitId, name, batteryLevel, charging):
@@ -20,6 +21,7 @@ class Device:
         self.name = name
         self.batteryLevel = batteryLevel
         self.charging = charging
+        
 
     def __repr__(self):
         return f"<Device(id:{self.id} unitId:{self.unitId} name:{self.name} batteryLevel:{self.batteryLevel} charging:{self.charging})>"
@@ -60,7 +62,8 @@ class Device:
     def select(self, tray):
         logger = logging.getLogger(Shared.appname)
         logger.info(f'Selected {self.name}')
-        Shared.selected_device = self.id
+        Shared.selected_device = self
+        Shared.selected_device_name = self.name
         asyncio.run(self.get_battery())
         if self.charging:
             tooltip = f'{self.name}: {self.batteryLevel}% (charging)'

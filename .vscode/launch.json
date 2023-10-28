@@ -5,19 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "PowerShell Launch Current File",
-            "type": "PowerShell",
+            "name": "Debug",
+            "type": "python",
             "request": "launch",
-            "script": "${file}",
-            "cwd": "${cwd}"
-        },
+            "program": "lgbattery.py",
+            "console": "integratedTerminal",
+            "justMyCode": false        },
         {
-            "name": "Python: Current File",
+            "name": "Debug into libraries",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
         }
     ]
 }

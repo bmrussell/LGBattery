@@ -50,3 +50,85 @@ pip install -r .\requirements.txt
 pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile --noconsole .\lgbattery.py
 ```
 Then enjoy `.\dist\lgbattery.exe`
+
+## LGHUB API
+
+From a combination of black-box poking about and the author cited above:
+
+### Connecting to the API
+1. Open a web socket to `ws://localhost:9010` with the following headers:
+
+    |Header|Value|
+    |--|--|
+    |Origin|file://|
+    |Pragma|no-cache|
+    |Cache-Control|no-cache|
+    |Sec-WebSocket-Extensions|permessage-deflate; client_max_window_bits|
+    |Sec-WebSocket-Protocol|json|
+
+
+### ENUMERATING DEVICES
+
+1. Send the following request to get a list of devices:
+    ```json
+    {
+        "msgId": "",
+        "verb": "GET",
+        "path": "/devices/list"
+    }
+    ```
+
+Response is:
+* an JSON array of objects, one per device under `message['payload']['deviceInfos']`.
+* `message['payload']['deviceInfos'][]['capabilities']['hasBatteryStatus']` is `True` if the device has a battery that can be queried.
+* `message['payload']['deviceInfos']['id']` seems not to be unique over time, so no good for saving which device is being monitored. Original release used this & was changed to use `extendedDisplayName` instead as user unlikely to have multiple instances of the same peripheral.
+
+### WATCHING FOR BATTERY CHANGE
+
+1. Send the following request:
+It looks like the subscription is cancelled when you get a reply, so needs to be sent every time you get a response back, not just once at the start.
+    ```json
+    {
+        "msgId": "",
+        "verb": "SUBSCRIBE",
+        "path": "/battery/state/changed"
+    }
+    ```
+
+2. Receive the following response and parse
+    ```json
+    {
+        "msgId": "50d84cf9-13c6-4376-83c9-01b4f0655915",
+        "verb": "BROADCAST",
+        "path": "/battery/state/changed",
+        "origin": "backend",
+        "payload": {
+            "@type": "type.googleapis.com/logi.protocol.wireless.Battery",
+            "deviceId": "dev00000007",
+            "percentage": 74,
+            "mileage": 24.9428902,
+            "maxLifeSpan": 33.7066078,
+            "charging": False,
+            "consumption": {
+                "value": 7.03438568,
+                "details": {
+                    "system": 5.92066669,
+                    "sensor": 4.28,
+                    "mcu": 1.64066672,
+                    "roller": 0,
+                    "reportRate": 0,
+                    "lighting": 5.4763155,
+                    "volume": 0
+                },
+                "useMw": True
+            },
+            "simpleBattery": False,
+            "criticalLevel": False,
+            "chargingError": False,
+            "componentType": "INVALID_TYPE",
+            "fullyCharged": False
+        }
+    }
+    ```
+
+    This response only has the `deviceId` which isn't unique over time, so when we save and load the prefs we use `exendedDisplayName`, then keep track of the selected device as an object which carries the `exendedDisplayName` and the `deviceId`

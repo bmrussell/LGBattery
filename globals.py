@@ -17,7 +17,9 @@ class Shared:
 
     appname         = 'lgbattery'
     datadir         = f'{os.getenv("APPDATA")}\\{appname}'
-    selected_device = ''
+    selected_device_name = ''   # Used to temporarily use the selected device from prefs as 
+                                # we haven't loaded the device list when we load the prefs
+    selected_device = None      # Set after prefs load when we have the device list
     devices         = []
     systray         = None
     logger          = None
@@ -52,7 +54,7 @@ class Shared:
             
         if prefs != None:
             if 'selected_device' in prefs:
-                self.selected_device = prefs['selected_device']
+                self.selected_device_name = prefs['selected_device']
 
             if 'level_file' in prefs:
                 self.level_file = prefs['level_file']
@@ -79,7 +81,7 @@ class Shared:
         if not config.has_section('PREFS'):
             config.add_section('PREFS')
         
-        config.set('PREFS', 'selected_device', self.selected_device)
+        config.set('PREFS', 'selected_device', self.selected_device.name)
 
         if self.level_file != None:
             config.set('PREFS', 'level_file', self.level_file)
@@ -101,11 +103,11 @@ class Shared:
             config.write(configfile)
 
     def refresh_tray(self):
-        if self.selected_device == '' or len(self.devices) == 0:
+        if self.selected_device == None or len(self.devices) == 0:
             return None
         
         for dev in self.devices:
-            if dev.id == self.selected_device:
+            if dev.id == self.selected_device.id:
                 dev.select(self.systray)
     
 Shared = Shared()

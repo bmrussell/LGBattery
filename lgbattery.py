@@ -11,7 +11,7 @@ import websockets
 from logging.config import dictConfig
 from infi.systray import SysTrayIcon
 
-from device import Device, get_device
+from device import Device, get_device_by_id
 from icons import get_icon, export_icons
 from globals import Shared
 
@@ -54,13 +54,19 @@ async def get_devices():
             if message['path'] == '/devices/list':
                 logger.debug(f'Found {len(message['payload']['deviceInfos'])} devices')
                 for d in message['payload']['deviceInfos']:
-                    device = Device(id=d['id']
-                                    ,unitId=d['deviceUnitId']
-                                    ,name=d['extendedDisplayName']
-                                    ,batteryLevel=None
-                                    ,charging=False)
-                    logger.debug(f'Status recieved for: {str(device)} (selected={Shared.selected_device})')
-                    Shared.devices.append(device)
+                    if d['capabilities']['hasBatteryStatus']:
+                        device = Device(id=d['id']
+                                        ,unitId=d['deviceUnitId']
+                                        ,name=d['extendedDisplayName']
+                                        ,batteryLevel=None
+                                        ,charging=False)
+                        
+                        # Set the selected device on load
+                        if d['extendedDisplayName'] == Shared.selected_device_name:
+                            Shared.selected_device = device
+                            
+                        logger.debug(f'Found device: {str(device)} (selected={Shared.selected_device})')
+                        Shared.devices.append(device)
                 break
         
         
@@ -90,10 +96,11 @@ async def watch_battery():
         try:
             logger.debug("Connected to LG Tray websocket")
             request = json.dumps(notifier_request)
-            await websocket.send(request)
-            logger.debug(f"Sent request: {request}")
             done = False
             while done == False:
+                await websocket.send(request)
+                logger.debug(f"Sent request: {request}")
+                
                 Shared.wait_task = asyncio.create_task(websocket.recv())
                 try:
                     response = await asyncio.gather(Shared.wait_task)
@@ -105,8 +112,8 @@ async def watch_battery():
                         if message['path'] != '/battery/state/changed':
                             continue
                             
-                        device = get_device(message['payload']['deviceId'])
-                        if None != device and device.id == Shared.selected_device:
+                        device = get_device_by_id(message['payload']['deviceId'])
+                        if None != device and device.id == Shared.selected_device.id:
 
                             device.charging = message['payload']['charging']
                             device.batteryLevel = message['payload']['percentage']
@@ -125,18 +132,23 @@ async def watch_battery():
                                     f.write(str(device.batteryLevel))
                                                                 
                 except asyncio.CancelledError:
-                    logger.debug("await cancelled")
-                    done = True
+                    logger.info("Await cancelled")
+                    done = False
                     
         except websockets.ConnectionClosedOK as ex:
-            return
+            logger.info("Connection Closed")
+            return False
         
-if __name__ == '__main__':    
+        except Exception as ex:
+            logger.error(f"Other Exception: {str(ex)}. LG HUb probably went away or PC resumed from sleep")
+            return True
+                
+if __name__ == '__main__':
+    
     Shared.load_prefs()
     Shared.init_logging()
-    
-    
     Shared.logger.debug('Started')
+    
     export_icons()
     
     asyncio.run(get_devices())
