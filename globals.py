@@ -12,10 +12,9 @@ class Shared:
     Args:
         Singleton class for application configuration
     """
-    
-    load_dotenv()
 
     appname         = 'lgbattery'
+    quit_selected   = False
     datadir         = f'{os.getenv("APPDATA")}\\{appname}'
     selected_device_name = ''   # Used to temporarily use the selected device from prefs as 
                                 # we haven't loaded the device list when we load the prefs
@@ -27,6 +26,9 @@ class Shared:
     log_level       = None
     log_file        = None
     level_file      = None
+    
+    
+    load_dotenv()
 
     def init_logging(self):
         rootlogger = logging.getLogger()

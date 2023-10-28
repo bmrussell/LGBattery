@@ -19,6 +19,7 @@ from globals import Shared
 
 def quit(tray):
     """Bailing"""
+    quit_selected = True
     Shared.save_prefs()
     Shared.wait_task.cancel()
 
@@ -26,7 +27,6 @@ def quit(tray):
 async def get_devices():
     """Get a list of devices from GHub by sending a /devices/list request to its websocket
     """
-    logger = logging.getLogger(Shared.appname)
 
     headers = {'Origin': 'file://',
             'Pragma': 'no-cache',
@@ -45,14 +45,14 @@ async def get_devices():
                                 subprotocols=['json'],
                                 ) as websocket:
 
-        logger.debug("Connected to LG Tray websocket")
+        Shared.logger.debug("Connected to LG Tray websocket")
         request = json.dumps(devices_request)
         await websocket.send(request)
         while True:            
             response = await websocket.recv()            
             message = json.loads(response)            
             if message['path'] == '/devices/list':
-                logger.debug(f'Found {len(message['payload']['deviceInfos'])} devices')
+                Shared.logger.debug(f'Found {len(message['payload']['deviceInfos'])} devices')
                 for d in message['payload']['deviceInfos']:
                     if d['capabilities']['hasBatteryStatus']:
                         device = Device(id=d['id']
@@ -65,7 +65,7 @@ async def get_devices():
                         if d['extendedDisplayName'] == Shared.selected_device_name:
                             Shared.selected_device = device
                             
-                        logger.debug(f'Found device: {str(device)} (selected={Shared.selected_device})')
+                        Shared.logger.debug(f'Found device: {str(device)} (selected={Shared.selected_device})')
                         Shared.devices.append(device)
                 break
         
@@ -94,12 +94,12 @@ async def watch_battery():
                                   ) as websocket:
         
         try:
-            logger.debug("Connected to LG Tray websocket")
+            Shared.logger.debug("Connected to LG Tray websocket")
             request = json.dumps(notifier_request)
             done = False
             while done == False:
                 await websocket.send(request)
-                logger.debug(f"Sent request: {request}")
+                Shared.logger.debug(f"Sent request: {request}")
                 
                 Shared.wait_task = asyncio.create_task(websocket.recv())
                 try:
@@ -107,7 +107,7 @@ async def watch_battery():
                     
                     if websocket.closed == False and response != None:                        
                         message = json.loads(response[0])
-                        logger.debug(f"Received : {message}")
+                        Shared.logger.debug(f"Received : {message}")
                         
                         if message['path'] != '/battery/state/changed':
                             continue
@@ -124,7 +124,7 @@ async def watch_battery():
                                 tooltip = f'{device.name}: {str(device.batteryLevel)}%' 
                             icon = get_icon(device.batteryLevel)
                             
-                            logger.info(f"Level={device.batteryLevel}, Charging={device.charging}, Icon={icon}")
+                            Shared.logger.info(f"Level={device.batteryLevel}, Charging={device.charging}, Icon={icon}")
                             Shared.systray.update(hover_text=tooltip, icon=icon)
 
                             if Shared.level_file != None:
@@ -132,16 +132,14 @@ async def watch_battery():
                                     f.write(str(device.batteryLevel))
                                                                 
                 except asyncio.CancelledError:
-                    logger.info("Await cancelled")
+                    Shared.logger.info("Await cancelled")
                     done = False
                     
         except websockets.ConnectionClosedOK as ex:
-            logger.info("Connection Closed")
+            Shared.logger.info("Connection Closed")
             return False
         
-        except Exception as ex:
-            logger.error(f"Other Exception: {str(ex)}. LG HUb probably went away or PC resumed from sleep")
-            return True
+
                 
 if __name__ == '__main__':
     
@@ -162,8 +160,12 @@ if __name__ == '__main__':
     Shared.systray = SysTrayIcon(get_icon(101), "...", menu_options=menu_options, on_quit=quit)
     Shared.systray.start()
     Shared.refresh_tray()
-    
-    asyncio.run(watch_battery())
-    
+   
+    while Shared.quit_selected == False:
+        try:
+            asyncio.run(watch_battery())
+        except Exception as ex:
+            Shared.logger.info(f"Exception. PC maybe woke up from sleep {str(ex)}")
+            
     Shared.systray.shutdown()
     sys.exit(0)
