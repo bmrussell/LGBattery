@@ -131,4 +131,4 @@ It looks like the subscription is cancelled when you get a reply, so needs to be
     }
     ```
 
-    This response only has the `deviceId` which isn't unique over time, so when we save and load the prefs we use `exendedDisplayName`, then keep track of the selected device as an object which carries the `exendedDisplayName` and the `deviceId`
+    This response only has the `deviceId` which isn't unique over time, so when we save and load the prefs we use `extendedDisplayName`, then keep track of the selected device as an object which carries the `extendedDisplayName` and the `deviceId`

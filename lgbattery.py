@@ -18,10 +18,12 @@ from globals import Shared
 
 
 def quit(tray):
+    Shared.logger.debug("Quit called")
     """Bailing"""
     quit_selected = True
     Shared.save_prefs()
     Shared.wait_task.cancel()
+    Shared.logger.debug("Cancel task sent")
 
 
 async def get_devices():
@@ -87,17 +89,18 @@ async def watch_battery():
         'verb': 'SUBSCRIBE',
         'path': '/battery/state/changed'
     }
-
+    request = json.dumps(notifier_request)
+    
     async with websockets.connect(uri="ws://localhost:9010",
                                   extra_headers=headers,
                                   subprotocols=['json'],
                                   ) as websocket:
         
         try:
-            Shared.logger.debug("Connected to LG Tray websocket")
-            request = json.dumps(notifier_request)
+            Shared.logger.debug("Connected to LG Tray websocket")            
             done = False
             while done == False:
+                
                 await websocket.send(request)
                 Shared.logger.debug(f"Sent request: {request}")
                 
@@ -113,6 +116,11 @@ async def watch_battery():
                             continue
                             
                         device = get_device_by_id(message['payload']['deviceId'])
+                        if device == None:
+                            Shared.logger.debug("get_device_by_id() == None")
+                        else:
+                            Shared.logger.debug(f"get_device_by_id() == (id={device.id}, name={device.name})")
+                            
                         if None != device and device.id == Shared.selected_device.id:
 
                             device.charging = message['payload']['charging']
