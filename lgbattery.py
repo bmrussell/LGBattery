@@ -10,8 +10,7 @@ import websockets
 from infi.systray import SysTrayIcon
 
 from device import Device, get_device_by_id
-from exceptions import (BatteryMonitoringError, GracefulShutdown,
-                        UnknownDeviceError)
+from exceptions import BatteryMonitoringError, UnknownDeviceError
 from globals import Shared
 from icons import export_icons, get_icon
 
