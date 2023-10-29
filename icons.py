@@ -15,7 +15,7 @@ def export_icons():
             extractor.export_icon(iconfile, x)
 
     logger = logging.getLogger(Shared.appname)
-    logger.debug("Got icons")
+    logger.debug("EXPORT_ICONS: Got icons")
     
 def get_icon(level):    
     if level >= 0 and level <= 20:

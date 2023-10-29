@@ -61,7 +61,7 @@ class Device:
     
     def select(self, tray):
         logger = logging.getLogger(Shared.appname)
-        logger.info(f'Selected {self.name}')
+        logger.info(f'Device.SELECT: Selected {self.id} {self.name}')
         Shared.selected_device = self
         Shared.selected_device_name = self.name
         asyncio.run(self.get_battery())
