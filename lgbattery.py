@@ -1,20 +1,19 @@
 # https://pypi.org/project/infi.systray/
 # https://pypi.org/project/websockets/
+import asyncio
+import json
+import os
 import sys
 import time
-import os
-import json
-import asyncio
-import logging
-import websockets
 
-from logging.config import dictConfig
+import websockets
 from infi.systray import SysTrayIcon
 
 from device import Device, get_device_by_id
-from icons import get_icon, export_icons
-from exceptions import BatteryMonitoringError, UnknownDeviceError, GracefulShutdown
+from exceptions import (BatteryMonitoringError, GracefulShutdown,
+                        UnknownDeviceError)
 from globals import Shared
+from icons import export_icons, get_icon
 
 
 def quit(tray):
@@ -25,8 +24,6 @@ def quit(tray):
     Shared.wait_task.cancel()
     Shared.logger.debug("QUIT: Hard Exit.")
     os._exit(0)
-    #raise GracefulShutdown('Quit selected')
-    
 
 
 async def get_devices():

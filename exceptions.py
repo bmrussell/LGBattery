@@ -3,6 +3,3 @@ class BatteryMonitoringError(Exception):
 
 class UnknownDeviceError(BatteryMonitoringError):
     pass
-
-class GracefulShutdown(BatteryMonitoringError):
-    pass
