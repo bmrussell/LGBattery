@@ -38,4 +38,4 @@ jobs:
           automatic_release_tag: "latest"
           prerelease: true
           title: "Automatically Drafted Release"
-          files: .\dist\lgbattery.exe
+          files: dist/lgbattery.exe
