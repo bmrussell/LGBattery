@@ -28,6 +28,9 @@ jobs:
       - name: Run pyinstaller
         run: pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile --noconsole .\lgbattery.py
 
+      - name: Debug check
+        run: ls
+
       - name: Create pre-release
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
@@ -35,4 +38,4 @@ jobs:
           automatic_release_tag: "latest"
           prerelease: true
           title: "Automatically Drafted Release"
-          files: "dist\\lgbattery.exe"
+          files: .\\dist\\lgbattery.exe
