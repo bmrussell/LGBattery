@@ -53,7 +53,7 @@ Then enjoy `.\dist\lgbattery.exe`
 
 ## LGHUB API
 
-From a combination of black-box poking about and the author cited above:
+From a combination of black-box poking about and the author cited above. SysInternals strings utility revealed these listed [endpoints](endpoints.md).
 
 ### Connecting to the API
 1. Open a web socket to `ws://localhost:9010` with the following headers:
