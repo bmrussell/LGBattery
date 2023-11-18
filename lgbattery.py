@@ -1,8 +1,7 @@
-# https://pypi.org/project/infi.systray/
-# https://pypi.org/project/websockets/
 import asyncio
 import json
 import os
+import socket
 import sys
 import time
 
@@ -125,13 +124,14 @@ async def watch_battery():
                 # May have resumed from sleep and LGHub changed the device IDs under us
                 # So raise an exception to bubble up to the top and start the monitoring again at the top level
                 message = f"Got a message from an unknown device with id {message['payload']['deviceId']}"
-                Shared.logger.error(f'WATCH_BATTERY: {message}')
+                Shared.logger.warning(f'WATCH_BATTERY: {message}')
                 raise UnknownDeviceError(message)
             
             Shared.logger.debug(f"WATCH_BATTERY: get_device_by_id({message['payload']['deviceId']}) == (id={device.id}, name={device.name})")
                 
             if device.id == Shared.selected_device.id:
                 device.charging = message['payload']['charging']
+                changed = device.batteryLevel != message['payload']['percentage'] or device.charging != message['payload']['charging']
                 device.batteryLevel = message['payload']['percentage']
                 
                 if device.charging:
@@ -142,14 +142,29 @@ async def watch_battery():
                 icon = get_icon(device.batteryLevel)
                 
                 Shared.logger.info(f"WATCH_BATTERY: Level={device.batteryLevel}, Charging={device.charging}, Icon={icon}")
-                Shared.systray.update(hover_text=tooltip, icon=icon)
+                if changed:
+                    Shared.systray.update(hover_text=tooltip, icon=icon)
 
                 if Shared.level_file != None:
                     with open(Shared.level_file, 'w') as f:
                         f.write(str(device.batteryLevel))
 
 
-        
+
+def check_socket(address, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.connect((address, port))            
+            return True
+        except:            
+            return False
+
+def wait_for_ghub():
+    for i in range(5):
+        if check_socket('localhost', 9010):
+            return True
+        time.sleep(30)
+    return False
 
 if __name__ == '__main__':
     
@@ -172,16 +187,23 @@ if __name__ == '__main__':
     Shared.systray.start()
     Shared.refresh_tray()
    
+    if wait_for_ghub() == False:
+        Shared.systray.shutdown()
+        sys.exit(0)
+        
     while Shared.quit_selected == False:
         try:
             asyncio.run(watch_battery())
         except UnknownDeviceError as ex:
             # Device list changed when we were running so refresh the list of devices
             asyncio.run(get_devices())
+            # Force update
+            Shared.selected_device.select(None)
             
         except Exception as ex:            
             Shared.logger.info(f"MAIN(): Exception {ex.__class__.__name__}. PC maybe woke up from sleep {str(ex)}.")
-            
+            if wait_for_ghub() == False:
+                break
             
     Shared.systray.shutdown()
     sys.exit(0)

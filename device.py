@@ -54,6 +54,7 @@ class Device:
                 await websocket.send(request)
                 response = await websocket.recv()
                 message = json.loads(response)
+                Shared.logger.info(f'Received: {message}')
                 if message['path'] == f'/battery/{self.id}/state':
                     self.batteryLevel = message['payload']['percentage']
                     self.charging = (message['payload']['charging'] == True)
