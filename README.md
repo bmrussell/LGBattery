@@ -51,6 +51,13 @@ pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile
 ```
 Then enjoy `.\dist\lgbattery.exe`
 
+Refresh Pip dependencies with
+
+```powershell
+PS> pip freeze | %{$_.split('==')[0]} | %{pip install --upgrade $_}
+```
+
+
 ## LGHUB API
 
 From a combination of black-box poking about and the author cited above. SysInternals strings utility revealed these listed [endpoints](endpoints.md).

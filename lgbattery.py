@@ -15,12 +15,12 @@ from icons import export_icons, get_icon
 
 
 def quit(tray):
-    Shared.logger.debug("QUIT: Quit called")
+    Shared.logger.info("QUIT: Quit called")
     """Bailing"""
     quit_selected = True
     Shared.save_prefs()
     Shared.wait_task.cancel()
-    Shared.logger.debug("QUIT: Hard Exit.")
+    Shared.logger.info("QUIT: Hard Exit.")
     os._exit(0)
 
 
@@ -50,12 +50,16 @@ async def get_devices():
         request = json.dumps(devices_request)
         await websocket.send(request)
         while True:            
-            response = await websocket.recv()            
+            response = await websocket.recv()
             message = json.loads(response)            
             if message['path'] == '/devices/list':
-                Shared.logger.debug(f'GET_DEVICES: Found {len(message['payload']['deviceInfos'])} devices')
-                for d in message['payload']['deviceInfos']:
-                    Shared.logger.debug(f'GET_DEVICES: Found device: {d['extendedDisplayName']} ({d['id']}). Battery={d['capabilities']['hasBatteryStatus']}')
+                
+                for d in message['payload']['deviceInfos']:                    
+                    device_id = d['id']
+                    device_name = d['extendedDisplayName']
+                    has_battery = "with battery" if d['capabilities']['hasBatteryStatus'] else "with no battery"
+                    Shared.logger.debug(f'GET_DEVICES: Found device: {device_id} ({device_name}), {has_battery}.')
+                    
                     if d['capabilities']['hasBatteryStatus']:
                         device = Device(id=d['id']
                                         ,unitId=d['deviceUnitId']
@@ -96,7 +100,6 @@ async def watch_battery():
                                     subprotocols=['json'],
                                     ) as websocket:                
         Shared.logger.debug("WATCH_BATTERY: Connected to LG Tray websocket")            
-        #raise ValueError('A very specific bad thing happened.')
         while True:
             await websocket.send(request)
             Shared.logger.debug(f"WATCH_BATTERY: Sent request {request}")
@@ -159,14 +162,18 @@ def check_socket(address, port):
         except:            
             return False
 
-def wait_for_ghub():
-    for i in range(5):
+def wait_for_ghub(times=5, interval=30):
+    for _ in range(times):
         if check_socket('localhost', 9010):
             return True
-        time.sleep(30)
+        time.sleep(interval)
     return False
 
 if __name__ == '__main__':
+
+    if wait_for_ghub() == False:
+        Shared.logger.error('GHUB not found. Exiting')
+        sys.exit(0)
     
     Shared.load_prefs()
     Shared.init_logging()
@@ -187,21 +194,25 @@ if __name__ == '__main__':
     Shared.systray.start()
     Shared.refresh_tray()
    
-    if wait_for_ghub() == False:
-        Shared.systray.shutdown()
-        sys.exit(0)
         
     while Shared.quit_selected == False:
         try:
             asyncio.run(watch_battery())
+            Shared.logger.info('Watching for changes')
         except UnknownDeviceError as ex:
             # Device list changed when we were running so refresh the list of devices
-            asyncio.run(get_devices())
+            Shared.logger.debug('Got an unknown device. Refreshing the device list')
+            if wait_for_ghub() == False:
+                Shared.logger.error('GHUB not found. Exiting')
+                break
+            asyncio.run(get_devices())  
+            Shared.logger.info('Refreshed device list')
             # Force update
             Shared.selected_device.select(None)
+            Shared.refresh_tray()
             
         except Exception as ex:            
-            Shared.logger.info(f"MAIN(): Exception {ex.__class__.__name__}. PC maybe woke up from sleep {str(ex)}.")
+            Shared.logger.error(f"MAIN(): Exception {ex.__class__.__name__}. PC maybe woke up from sleep {str(ex)}.")
             if wait_for_ghub() == False:
                 break
             

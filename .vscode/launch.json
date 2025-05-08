@@ -6,14 +6,16 @@
     "configurations": [
         {
             "name": "Debug",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "lgbattery.py",
             "console": "integratedTerminal",
-            "justMyCode": false        },
+            "justMyCode": true ,
+            "stopOnEntry": false
+               },
         {
             "name": "Debug into libraries",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
