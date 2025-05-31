@@ -44,7 +44,6 @@ There are probably many threading crimes committed in this code. I have zero exp
 Built on Python 3.12.0. From PowerShell:
 
 ```powershell 
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r .\requirements.txt
 pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile --noconsole .\lgbattery.py
@@ -88,7 +87,8 @@ From a combination of black-box poking about and the author cited above. SysInte
 Response is:
 * an JSON array of objects, one per device under `message['payload']['deviceInfos']`.
 * `message['payload']['deviceInfos'][]['capabilities']['hasBatteryStatus']` is `True` if the device has a battery that can be queried.
-* `message['payload']['deviceInfos']['id']` seems not to be unique over time, so no good for saving which device is being monitored. Original release used this & was changed to use `extendedDisplayName` instead as user unlikely to have multiple instances of the same peripheral.
+* `message['payload']['deviceInfpython -m venv .venv
+os']['id']` seems not to be unique over time, so no good for saving which device is being monitored. Original release used this & was changed to use `extendedDisplayName` instead as user unlikely to have multiple instances of the same peripheral.
 
 ### WATCHING FOR BATTERY CHANGE
 

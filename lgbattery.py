@@ -185,7 +185,11 @@ if __name__ == '__main__':
     asyncio.run(get_devices())
     options = []
     for device in Shared.devices:
-        t = (device.name, None, device.select)
+        if device.name == Shared.selected_device_name:
+            name = f"*{device.name}"
+        else:
+            name = device.name
+        t = (name, None, device.select)
         options.append(t)
 
     menu_options = tuple(options)

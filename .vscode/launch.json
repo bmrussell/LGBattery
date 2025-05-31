@@ -5,14 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "PowerShell Launch Current File",
+            "type": "PowerShell",
+            "request": "launch",
+            "script": "${file}",
+            "cwd": "${cwd}"
+        },
+        {
+            "name": "Debug lgbattery",
             "type": "debugpy",
             "request": "launch",
             "program": "lgbattery.py",
             "console": "integratedTerminal",
-            "justMyCode": true ,
+            "justMyCode": true,
             "stopOnEntry": false
-               },
+        },
         {
             "name": "Debug into libraries",
             "type": "debugpy",
