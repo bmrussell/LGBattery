@@ -1,87 +1,109 @@
+from __future__ import annotations
+
 import asyncio
 import json
-import os
-import socket
+import logging
 import sys
-import time
+from dataclasses import dataclass
 
 import websockets
 from infi.systray import SysTrayIcon
 
-from device import Device, get_device_by_id
-from exceptions import BatteryMonitoringError, UnknownDeviceError
-from globals import Shared
 from icons import export_icons, get_icon
+from prefs import APPNAME, SELECTED_DEVICE_NAME, load_prefs, save_prefs
+
+wait_task_holder = {}
+main_event_loop = None
 
 
-def quit(tray):
-    Shared.logger.info("QUIT: Quit called")
-    """Bailing"""
-    quit_selected = True
-    Shared.save_prefs()
-    Shared.wait_task.cancel()
-    Shared.logger.info("QUIT: Hard Exit.")
-    os._exit(0)
+class Device:
+    def __init__(self, parent, id, name):
+        self.parent = parent
+        self.id = id
+        self.name = name
+        self.battery_level = -1
+        self.charging = False
+        self.selected = False
+        
+            
+    parent: list[Device]
+    id: str
+    name: str
+    battery_level: int
+    charging: bool
+    selected: bool = False
+    
+    def select(self, systray):
+        for device in self.parent:
+            device.selected = False
+        self.selected = True
+        
+        refresh_tray(appinfo=appinfo, devices=self.parent, systray=systray)
+        
+@dataclass
+class appinfo:
+    devices: list[Device]
+    systray: SysTrayIcon
+    
 
+
+
+logging.basicConfig(level=logging.INFO)
 
 async def get_devices():
-    """Get a list of devices from GHub by sending a /devices/list request to its websocket
-    """
-
+    uri = "ws://localhost:9010"
+    
     headers = {'Origin': 'file://',
             'Pragma': 'no-cache',
             'Cache-Control': 'no-cache',
             'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
             'Sec-WebSocket-Protocol': 'json'}
-
+    
     devices_request = {
         'msgId': '',
         'verb': 'GET',
         'path': '/devices/list'
     }
-    Shared.logger.debug("GET_DEVICES: Start")
-    Shared.devices = []
-    async with websockets.connect(uri="ws://localhost:9010",
+            
+    async with websockets.connect(uri,
                                 extra_headers=headers,
-                                subprotocols=['json'],
-                                ) as websocket:
-
-        Shared.logger.debug("GET_DEVICES: Connected to LG Tray websocket")
+                                subprotocols=['json']) as websocket:
+        
+        devices = []
         request = json.dumps(devices_request)
         await websocket.send(request)
-        while True:            
+        while True:
             response = await websocket.recv()
-            message = json.loads(response)            
+            message = json.loads(response)
             if message['path'] == '/devices/list':
-                
-                for d in message['payload']['deviceInfos']:                    
-                    device_id = d['id']
-                    device_name = d['extendedDisplayName']
-                    has_battery = "with battery" if d['capabilities']['hasBatteryStatus'] else "with no battery"
-                    Shared.logger.debug(f'GET_DEVICES: Found device: {device_id} ({device_name}), {has_battery}.')
-                    
+                for d in message['payload']['deviceInfos']:
                     if d['capabilities']['hasBatteryStatus']:
-                        device = Device(id=d['id']
-                                        ,unitId=d['deviceUnitId']
-                                        ,name=d['extendedDisplayName']
-                                        ,batteryLevel=None
-                                        ,charging=False)
-                        
-                        Shared.devices.append(device)
-                        
-                        # Set the selected device on load
-                        if device.name == Shared.selected_device_name:
-                            Shared.selected_device = device
-                            Shared.logger.info(f"GET_DEVICES: Selected device: {str(device)}")
-
+                        device = Device(
+                            parent=devices,
+                            id=d['id'],
+                            name=d['extendedDisplayName'],
+                        )
+                        devices.append(device)
+                
                 break
-        
-        
-    
-async def watch_battery():
-    """Subscribe to battery change notifications by sending a SUBSCRIBE for /battery/state/changed on the GHub websocket
-    """
+            
+        logging.getLogger(APPNAME).info(f"get_devices(): {devices}")
+        return devices     
 
+
+def set_status(device_id, appinfo, is_charging, charge):
+    logging.getLogger(APPNAME).info(f"set_status(): device_id={device_id}, appinfo={appinfo}, is_charging={is_charging}, charge={charge}")
+    for device in appinfo.devices:
+        if device.id == device_id and (device.battery_level != charge or device.charging != is_charging):
+            device.charging = is_charging
+            device.battery_level = charge
+            logging.getLogger(APPNAME).info(f"{device.name} at {device.battery_level}%")
+            appinfo.systray.update(hover_text=f"{device.name}: {charge}%{' (charging)' if is_charging else ''}",icon=get_icon(charge))
+
+async def monitor(appinfo):
+    
+    global wait_task_holder
+    
     headers = {'Origin': 'file://',
                'Pragma': 'no-cache',
                'Cache-Control': 'no-cache',
@@ -95,130 +117,174 @@ async def watch_battery():
     }
     request = json.dumps(notifier_request)
     
+    monitoring = True
+    logging.getLogger(APPNAME).info(f"monitor()...")
     async with websockets.connect(uri="ws://localhost:9010",
                                     extra_headers=headers,
                                     subprotocols=['json'],
-                                    ) as websocket:                
-        Shared.logger.debug("WATCH_BATTERY: Connected to LG Tray websocket")            
-        while True:
+                                    ) as websocket:     
+
+        while monitoring:
             await websocket.send(request)
-            Shared.logger.debug(f"WATCH_BATTERY: Sent request {request}")
-            
-            
-            Shared.wait_task = asyncio.create_task(websocket.recv())
-            response = await asyncio.gather(Shared.wait_task)
-            
-            if websocket.closed or response == None:
-                # Either the connection was closed or something went wrong
-                # Deal with this in main
-                message = f"Exiting as something went wrong. websocket.closed={websocket.closed} response={response}"
-                Shared.logger.error(f'WATCH_BATTERY: {message}')
-                raise BatteryMonitoringError(message)
 
-            message = json.loads(response[0])
-            Shared.logger.debug(f"WATCH_BATTERY: Received {message}")
+            socket_task = asyncio.create_task(websocket.recv())
+            async with asyncio.Lock():
+                wait_task_holder['task'] = socket_task
             
-            if message['path'] != '/battery/state/changed':
-                continue
+            try:
+                response = await asyncio.gather(socket_task)
+
+                if websocket.closed or response == None:
+                    logging.getLogger(APPNAME).warning("WebSocket connection closed or no response received or quit selected.")
+                    break
                 
-            device = get_device_by_id(message['payload']['deviceId'])
-            if device == None:
-                Shared.logger.debug(f"WATCH_BATTERY: get_device_by_id({message['payload']['deviceId']}) returned None")
-                # May have resumed from sleep and LGHub changed the device IDs under us
-                # So raise an exception to bubble up to the top and start the monitoring again at the top level
-                message = f"Got a message from an unknown device with id {message['payload']['deviceId']}"
-                Shared.logger.warning(f'WATCH_BATTERY: {message}')
-                raise UnknownDeviceError(message)
-            
-            Shared.logger.debug(f"WATCH_BATTERY: get_device_by_id({message['payload']['deviceId']}) == (id={device.id}, name={device.name})")
-                
-            if device.id == Shared.selected_device.id:
-                device.charging = message['payload']['charging']
-                changed = device.batteryLevel != message['payload']['percentage'] or device.charging != message['payload']['charging']
-                device.batteryLevel = message['payload']['percentage']
-                
-                if device.charging:
-                    tooltip = f'{device.name}: {str(device.batteryLevel)}% (charging)'
+                if isinstance(response, list):
+                    message = json.loads(response[0])
                 else:
-                    tooltip = f'{device.name}: {str(device.batteryLevel)}%' 
-                    
-                icon = get_icon(device.batteryLevel)
+                    message = json.loads(response)
                 
-                Shared.logger.info(f"WATCH_BATTERY: Level={device.batteryLevel}, Charging={device.charging}, Icon={icon}")
-                if changed:
-                    Shared.systray.update(hover_text=tooltip, icon=icon)
+                if message['path'] != '/battery/state/changed':
+                    logging.getLogger(APPNAME).info(f"monitor(): message={message}")
+                    continue
+                            
+                payload = message['payload']
+                
+                
+                set_status(
+                    device_id=payload['deviceId'],
+                    appinfo=appinfo,
+                    is_charging=payload['charging'],
+                    charge=payload['percentage']
+                )
+                
+            except asyncio.exceptions.CancelledError as ex:
+                logging.getLogger(APPNAME).info("Task cancelled, stopping monitoring.")
+                monitoring = False
+            
+            except websockets.ConnectionClosedError as ex:
+                logging.getLogger(APPNAME).error("Connection closed. Probably came back from sleep")
+                break
 
-                if Shared.level_file != None:
-                    with open(Shared.level_file, 'w') as f:
-                        f.write(str(device.batteryLevel))
+            except Exception as ex:
+                logging.getLogger(APPNAME).info(f"Exception {ex} - keep monitoring.")
+                break
 
+    logging.getLogger(APPNAME).info(f"monitor()->{monitoring}")
+    return monitoring
 
+def quit(tray):
+    global main_event_loop
+    try:
+        if 'task' in wait_task_holder:
+            main_event_loop.call_soon_threadsafe(wait_task_holder['task'].cancel)
+    except Exception as ex:
+        logging.error(f"Error cancelling task: {ex}")
+            
+async def get_devices_a():
+    devices = await get_devices()
+    if len(devices) == 1:
+        devices[0].selected = True
+        logging.getLogger(APPNAME).info(f"get_devices_a(): Selected device: {devices[0].name}")
+    else:
+        for device in devices:
+            if device.name == SELECTED_DEVICE_NAME:
+                device.selected = True
+                logging.getLogger(APPNAME).info(f"get_devices_a(): Selected device: {device.name}")
+            else:
+                device.selected = False
+    return devices
 
-def check_socket(address, port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.connect((address, port))            
-            return True
-        except:            
-            return False
-
-def wait_for_ghub(times=5, interval=30):
-    for _ in range(times):
-        if check_socket('localhost', 9010):
-            return True
-        time.sleep(interval)
-    return False
-
-if __name__ == '__main__':
-
-    if wait_for_ghub() == False:
-        Shared.logger.error('GHUB not found. Exiting')
-        sys.exit(0)
+async def get_battery_level(id):
+    level = None
+    charging = False
     
-    Shared.load_prefs()
-    Shared.init_logging()
-    Shared.logger.debug('MAIN: Started')
-    
-    export_icons()
-    
-    # Get the devices on first run to set up the system tray
-    asyncio.run(get_devices())
-    options = []
-    for device in Shared.devices:
-        if device.name == Shared.selected_device_name:
-            name = f"*{device.name}"
-        else:
-            name = device.name
-        t = (name, None, device.select)
-        options.append(t)
-
-    menu_options = tuple(options)
-
-    Shared.systray = SysTrayIcon(get_icon(101), "...", menu_options=menu_options, on_quit=quit)
-    Shared.systray.start()
-    Shared.refresh_tray()
-   
+    headers = {'Origin': 'file://',
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-cache',
+            'Sec-WebSocket-Extensions': 'permessage-deflate; client_max_window_bits',
+            'Sec-WebSocket-Protocol': 'json'}
         
-    while Shared.quit_selected == False:
+    battery_request = {
+        'msgId': '',
+        'verb': 'GET',
+        'path': f'/battery/{id}/state'
+    }
+    
+    async with websockets.connect(uri="ws://localhost:9010",
+                                    extra_headers=headers,
+                                    subprotocols=['json'],
+                                    ) as websocket:    
+        while True:
+            request = json.dumps(battery_request)
+            await websocket.send(request)
+            response = await websocket.recv()
+            message = json.loads(response)            
+            if message['path'] == f'/battery/{id}/state':
+                level = message['payload']['percentage']
+                charging = (message['payload']['charging'] == True)
+                logging.getLogger(APPNAME).info(f"get_battery_level({id})-> level={level}, charging={charging}")
+                return level, charging
+                
+        return None
+    
+def refresh_tray(appinfo=None, devices=None, systray=None):
+    logging.getLogger(APPNAME).info(f"refresh_tray({appinfo})")
+    
+    if appinfo is not None:
+        systray = appinfo.systray
+        devices = appinfo.devices    
+       
+    for device in devices:
+        if device.selected:
+            if device.battery_level == -1 or device.battery_level is None:
+                # Fetch the battery level if not already set
+                #level, charging = main_event_loop.run_until_complete(get_battery_level(device.id))
+                level, charging = asyncio.run(get_battery_level(device.id))                
+                device.battery_level = level
+                device.charging = charging
+
+            charging_text = ", charging" if device.charging else ""
+            tooltip = f'{device.name}: {str(device.battery_level)}%{charging_text}'
+            icon = get_icon(device.battery_level)
+            logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={tooltip}")
+            systray.update(hover_text=tooltip, icon=icon)
+            
+    
+if __name__ == "__main__":
+    
+    # Manually create an event loop so we can manage it and call cancel on the
+    # task waiting for battery status in quit()
+    
+    load_prefs()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    main_event_loop = loop
+    
+    devices = loop.run_until_complete(get_devices_a())
+    export_icons()
+    options = []
+    for device in devices:
+        menuitem_icon = None
+        t = (device.name, menuitem_icon, device.select)
+        options.append(t)
+        
+    menu_options = tuple(options)
+    systray = SysTrayIcon(get_icon(101), "...", menu_options=menu_options, on_quit=quit)
+    appinfo = appinfo(devices=devices, systray=systray)
+    systray.start()
+
+
+    keep_monitoring = True
+    while keep_monitoring:
         try:
-            asyncio.run(watch_battery())
-            Shared.logger.info('Watching for changes')
-        except UnknownDeviceError as ex:
-            # Device list changed when we were running so refresh the list of devices
-            Shared.logger.debug('Got an unknown device. Refreshing the device list')
-            if wait_for_ghub() == False:
-                Shared.logger.error('GHUB not found. Exiting')
-                break
-            asyncio.run(get_devices())  
-            Shared.logger.info('Refreshed device list')
-            # Force update
-            Shared.selected_device.select(None)
-            Shared.refresh_tray()
+            refresh_tray(appinfo=appinfo)
+            keep_monitoring = loop.run_until_complete(monitor(appinfo))
             
-        except Exception as ex:            
-            Shared.logger.error(f"MAIN(): Exception {ex.__class__.__name__}. PC maybe woke up from sleep {str(ex)}.")
-            if wait_for_ghub() == False:
-                break
             
-    Shared.systray.shutdown()
+        except Exception as ex:
+            logging.getLogger(APPNAME).error(f"Error: {ex}")
+    
+    systray.shutdown()
+    loop.close()
+    save_prefs()
     sys.exit(0)

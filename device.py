@@ -4,8 +4,8 @@ import logging
 
 import websockets
 
-from globals import Shared
 from icons import get_icon
+from prefs import Shared
 
 
 def get_device_by_id(id):

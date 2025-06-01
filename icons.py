@@ -1,7 +1,10 @@
-import os
-import icoextract
 import logging
-from globals import Shared
+import os
+
+import icoextract
+
+from prefs import DATADIR
+
 
 def export_icons():
 
@@ -10,11 +13,11 @@ def export_icons():
 
     percents = ['00-20', '21-40', '41-60', '61-80', '81-100', 'unknown']
     for x in range(9, 15):
-        iconfile = f'{Shared.datadir}\\battery-{percents[x-9]}.ico'
+        iconfile = f'{DATADIR}\\battery-{percents[x-9]}.ico'
         if not os.path.exists(iconfile):
             extractor.export_icon(iconfile, x)
 
-    logger = logging.getLogger(Shared.appname)
+    logger = logging.getLogger(DATADIR)
     logger.debug("EXPORT_ICONS: Got icons")
     
 def get_icon(level):    
@@ -30,4 +33,4 @@ def get_icon(level):
         icon = 'battery-81-100.ico'
     else:
         icon = 'battery-unknown.ico'
-    return f"{Shared.datadir}\\{icon}"
+    return f"{DATADIR}\\{icon}"
