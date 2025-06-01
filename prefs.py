@@ -84,9 +84,9 @@ def save_prefs():
     if not config.has_section('PREFS'):
         config.add_section('PREFS')
     
-    config.set('PREFS', 'selected_device', self.selected_device.name)
+    config.set('PREFS', 'selected_device', SELECTED_DEVICE_NAME)
 
-    if self.LOG_FILE != None:
+    if LOG_FILE != None:
         config.set('PREFS', 'LOG_FILE', LOG_FILE)
 
 

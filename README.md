@@ -46,7 +46,7 @@ Built on Python 3.12.0. From PowerShell:
 ```powershell 
 .\.venv\Scripts\Activate.ps1
 pip install -r .\requirements.txt
-pyinstaller --hidden-import pkg_resources --hidden-import infi.systray --onefile --noconsole .\lgbattery.py
+pyinstaller --clean --onefile --noconsole --hidden-import=pkg_resources --hidden-import=infi.systray .\lgbattery.py
 ```
 Then enjoy `.\dist\lgbattery.exe`
 
