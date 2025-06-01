@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import socket
 import sys
+import time
 from dataclasses import dataclass
 
 import websockets
@@ -264,6 +266,21 @@ def refresh_by_selected_device(appinfo=None, devices=None, systray=None):
             logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
             systray.update(hover_text=hover_text, icon=get_icon(device.battery_level))
             
+
+def check_socket(address, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.connect((address, port))            
+            return True
+        except OSError:            
+            return False
+
+def wait_for_ghub(times=5, interval=30):
+    for _ in range(times):
+        if check_socket('localhost', 9010):
+            return True
+        time.sleep(interval)
+    return False
     
 if __name__ == "__main__":
     
@@ -271,6 +288,10 @@ if __name__ == "__main__":
     # task waiting for battery status in quit()
     
     load_prefs()
+    if not wait_for_ghub():
+        logging.getLogger(APPNAME).error("Could not connect to GHub. Is it running?")
+        sys.exit(1)
+        
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     main_event_loop = loop
@@ -291,14 +312,16 @@ if __name__ == "__main__":
 
     keep_monitoring = True
     while keep_monitoring:
+        
         try:
+            wait_for_ghub()
             refresh_by_selected_device(appinfo=appinfo)
             keep_monitoring = loop.run_until_complete(monitor(appinfo))
             
-            
         except Exception as ex:
             logging.getLogger(APPNAME).error(f"Error: {ex}")
-    
+
+
     systray.shutdown()
     loop.close()
     save_prefs()
