@@ -22,7 +22,7 @@ class Device:
         self.id = id
         self.name = name
         self.battery_level = -1
-        self.charging = False
+        self.is_charging = False
         self.selected = False
         
             
@@ -30,15 +30,21 @@ class Device:
     id: str
     name: str
     battery_level: int
-    charging: bool
+    is_charging: bool
     selected: bool = False
-    
+
+    def __str__(self):
+        return (f"Device(id={self.id}, name={self.name}, "
+                f"battery_level={self.battery_level}%, "
+                f"is_charging={'Yes' if self.is_charging else 'No'}, "
+                f"selected={'Yes' if self.selected else 'No'})")
+            
     def select(self, systray):
         for device in self.parent:
             device.selected = False
         self.selected = True
         
-        refresh_tray(appinfo=appinfo, devices=self.parent, systray=systray)
+        refresh_by_selected_device(appinfo=None, devices=self.parent, systray=systray)
         
 @dataclass
 class appinfo:
@@ -69,7 +75,7 @@ async def get_devices():
                                 extra_headers=headers,
                                 subprotocols=['json']) as websocket:
         
-        devices = []
+        devices = {}
         request = json.dumps(devices_request)
         await websocket.send(request)
         while True:
@@ -83,27 +89,56 @@ async def get_devices():
                             id=d['id'],
                             name=d['extendedDisplayName'],
                         )
-                        devices.append(device)
+                        devices[device.id] = device
                 
                 break
             
-        logging.getLogger(APPNAME).info(f"get_devices(): {devices}")
+        logging.getLogger(APPNAME).info(f"{devices}")
         return devices     
 
 
-def set_status(device_id, appinfo, is_charging, charge):
-    logging.getLogger(APPNAME).info(f"set_status(): device_id={device_id}, appinfo={appinfo}, is_charging={is_charging}, charge={charge}")
-    for device in appinfo.devices:
-        if device.id == device_id and (device.battery_level != charge or device.charging != is_charging):
-            device.charging = is_charging
-            device.battery_level = charge
-            logging.getLogger(APPNAME).info(f"{device.name} at {device.battery_level}%")
-            appinfo.systray.update(hover_text=f"{device.name}: {charge}%{' (charging)' if is_charging else ''}",icon=get_icon(charge))
+def refresh_by_device_id(device_id, appinfo, is_charging, battery_level):
+    
+    if device_id not in appinfo.devices:
+        logging.getLogger(APPNAME).debug(f"Refresh called for unknown device_id={device_id}")
+        return
+    
+    logging.getLogger(APPNAME).debug(f"device_id={device_id}, appinfo,is_charging={is_charging}, charge={battery_level}")    
+    device = appinfo.devices[device_id]    
+    if device.selected and (device.battery_level != battery_level or device.is_charging != is_charging):
+        device.is_charging = is_charging
+        device.battery_level = battery_level
+        
+        hover_text = f"{device.name}: {battery_level}%{' (charging)' if is_charging else ''}"
+        logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
+        appinfo.systray.update(hover_text,icon=get_icon(battery_level))
+
+async def handle_monitor_message(response, websocket, appinfo):
+    if websocket.closed or response is None:
+        logging.getLogger(APPNAME).warning("WebSocket connection closed or no response received or quit selected.")
+        return False
+
+    if isinstance(response, list):
+        message = json.loads(response[0])
+    else:
+        message = json.loads(response)
+
+    if message['path'] != '/battery/state/changed':
+        logging.getLogger(APPNAME).debug(f"message={message}")
+        return True
+
+    payload = message['payload']
+    refresh_by_device_id(
+        device_id=payload['deviceId'],
+        appinfo=appinfo,
+        is_charging=payload['charging'],
+        battery_level=payload['percentage']
+    )
+    return True
 
 async def monitor(appinfo):
-    
     global wait_task_holder
-    
+
     headers = {'Origin': 'file://',
                'Pragma': 'no-cache',
                'Cache-Control': 'no-cache',
@@ -116,13 +151,13 @@ async def monitor(appinfo):
         'path': '/battery/state/changed'
     }
     request = json.dumps(notifier_request)
-    
+
     monitoring = True
-    logging.getLogger(APPNAME).info(f"monitor()...")
+    logging.getLogger(APPNAME).debug("monitoring...")
     async with websockets.connect(uri="ws://localhost:9010",
-                                    extra_headers=headers,
-                                    subprotocols=['json'],
-                                    ) as websocket:     
+                                 extra_headers=headers,
+                                 subprotocols=['json'],
+                                 ) as websocket:
 
         while monitoring:
             await websocket.send(request)
@@ -130,46 +165,26 @@ async def monitor(appinfo):
             socket_task = asyncio.create_task(websocket.recv())
             async with asyncio.Lock():
                 wait_task_holder['task'] = socket_task
-            
+
             try:
                 response = await asyncio.gather(socket_task)
-
-                if websocket.closed or response == None:
-                    logging.getLogger(APPNAME).warning("WebSocket connection closed or no response received or quit selected.")
+                monitoring = await handle_monitor_message(response, websocket, appinfo)
+                if not monitoring:
                     break
-                
-                if isinstance(response, list):
-                    message = json.loads(response[0])
-                else:
-                    message = json.loads(response)
-                
-                if message['path'] != '/battery/state/changed':
-                    logging.getLogger(APPNAME).info(f"monitor(): message={message}")
-                    continue
-                            
-                payload = message['payload']
-                
-                
-                set_status(
-                    device_id=payload['deviceId'],
-                    appinfo=appinfo,
-                    is_charging=payload['charging'],
-                    charge=payload['percentage']
-                )
-                
+
             except asyncio.exceptions.CancelledError as ex:
                 logging.getLogger(APPNAME).info("Task cancelled, stopping monitoring.")
                 monitoring = False
-            
+
             except websockets.ConnectionClosedError as ex:
                 logging.getLogger(APPNAME).error("Connection closed. Probably came back from sleep")
                 break
 
             except Exception as ex:
-                logging.getLogger(APPNAME).info(f"Exception {ex} - keep monitoring.")
+                logging.getLogger(APPNAME).warning(f"Exception {ex} - keep monitoring.")
                 break
 
-    logging.getLogger(APPNAME).info(f"monitor()->{monitoring}")
+    logging.getLogger(APPNAME).debug(f"{'Keep monitoring' if monitoring else 'Stop monitoring'}")
     return monitoring
 
 def quit(tray):
@@ -182,21 +197,23 @@ def quit(tray):
             
 async def get_devices_a():
     devices = await get_devices()
+    
     if len(devices) == 1:
-        devices[0].selected = True
-        logging.getLogger(APPNAME).info(f"get_devices_a(): Selected device: {devices[0].name}")
+        (device_id, device), = devices.items()
+        device.selected = True
+        logging.getLogger(APPNAME).info(f"Selected device: {device.name}")
     else:
-        for device in devices:
+        for device_id, device in devices.items():
             if device.name == SELECTED_DEVICE_NAME:
                 device.selected = True
-                logging.getLogger(APPNAME).info(f"get_devices_a(): Selected device: {device.name}")
+                logging.getLogger(APPNAME).info(f"Selected device: {device.name}")
             else:
                 device.selected = False
     return devices
 
 async def get_battery_level(id):
     level = None
-    charging = False
+    is_charging = False
     
     headers = {'Origin': 'file://',
             'Pragma': 'no-cache',
@@ -221,33 +238,31 @@ async def get_battery_level(id):
             message = json.loads(response)            
             if message['path'] == f'/battery/{id}/state':
                 level = message['payload']['percentage']
-                charging = (message['payload']['charging'] == True)
-                logging.getLogger(APPNAME).info(f"get_battery_level({id})-> level={level}, charging={charging}")
-                return level, charging
+                is_charging = (message['payload']['charging'] == True)
+                logging.getLogger(APPNAME).info(f"device {id} has level={level}, charging={is_charging}")
+                return level, is_charging
                 
         return None
     
-def refresh_tray(appinfo=None, devices=None, systray=None):
-    logging.getLogger(APPNAME).info(f"refresh_tray({appinfo})")
+def refresh_by_selected_device(appinfo=None, devices=None, systray=None):
+    logging.getLogger(APPNAME).debug("refreshing")
     
     if appinfo is not None:
         systray = appinfo.systray
         devices = appinfo.devices    
        
-    for device in devices:
+    for device_id, device in devices.items():
         if device.selected:
             if device.battery_level == -1 or device.battery_level is None:
                 # Fetch the battery level if not already set
                 #level, charging = main_event_loop.run_until_complete(get_battery_level(device.id))
-                level, charging = asyncio.run(get_battery_level(device.id))                
+                level, is_charging = asyncio.run(get_battery_level(device.id))                
                 device.battery_level = level
-                device.charging = charging
-
-            charging_text = ", charging" if device.charging else ""
-            tooltip = f'{device.name}: {str(device.battery_level)}%{charging_text}'
-            icon = get_icon(device.battery_level)
-            logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={tooltip}")
-            systray.update(hover_text=tooltip, icon=icon)
+                device.is_charging = is_charging
+           
+            hover_text = f"{device.name}: {device.battery_level}%{' (charging)' if device.is_charging else ''}"
+            logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
+            systray.update(hover_text=hover_text, icon=get_icon(device.battery_level))
             
     
 if __name__ == "__main__":
@@ -263,7 +278,7 @@ if __name__ == "__main__":
     devices = loop.run_until_complete(get_devices_a())
     export_icons()
     options = []
-    for device in devices:
+    for device_id, device in devices.items():
         menuitem_icon = None
         t = (device.name, menuitem_icon, device.select)
         options.append(t)
@@ -277,7 +292,7 @@ if __name__ == "__main__":
     keep_monitoring = True
     while keep_monitoring:
         try:
-            refresh_tray(appinfo=appinfo)
+            refresh_by_selected_device(appinfo=appinfo)
             keep_monitoring = loop.run_until_complete(monitor(appinfo))
             
             

@@ -15,19 +15,32 @@ logger = None
 def init_logging():
     global logger
     
+    # Set the default logging level to WARNING for the root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(level=logging.WARNING)    
     
+    # Create a console handler with the specified log level
     logger = logging.getLogger(APPNAME)
     logger.setLevel(LOG_LEVEL)
-
-    if LOG_FILE == None:
-        logger.addHandler(logging.StreamHandler(stream=sys.stdout))
-    else:
-        logger.addHandler(logging.FileHandler(f'{DATADIR}\\{LOG_FILE}'))
+    
+    # Clear any existing handlers to prevent duplicate logging
+    if logger.hasHandlers():
+        logger.handlers.clear()
         
-    formatter = logging.Formatter(fmt='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
-    logger.handlers[0].setFormatter(formatter)
+    # Stop duplicate output from the root logger
+    logger.propagate = False
+    
+    # Set up console logging
+    stdio_handler = logging.StreamHandler()        
+    formatter = logging.Formatter('%(asctime)s | %(name)s | %(levelname)s | %(funcName)s | line %(lineno)d | %(message)s')
+    stdio_handler.setFormatter(formatter)
+    logger.addHandler(stdio_handler)
+
+    # Set up file logging if LOG_FILE is specified
+    if LOG_FILE != None:
+        file_handler = logging.FileHandler(f'{DATADIR}\\{LOG_FILE}')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
     
         
 def load_prefs():
