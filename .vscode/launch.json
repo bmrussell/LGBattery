@@ -28,12 +28,14 @@
             "stopOnEntry": false
         },
         {
-            "name": "Debug into libraries",
+            "name": "Debug lgbattery with libraries",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "lgbattery.py",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "cwd": "${cwd}",
+            "justMyCode": false,
+            "stopOnEntry": false
         }
     ]
 }
