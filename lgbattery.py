@@ -7,6 +7,7 @@ import socket
 import sys
 import time
 from dataclasses import dataclass
+from functools import wraps
 
 import websockets
 from infi.systray import SysTrayIcon
@@ -95,14 +96,46 @@ async def get_devices():
                 
                 break
             
-        logging.getLogger(APPNAME).info(f"{devices}")
+        devices_str = "Devices with batteries: "    
+        for device_id, device in devices.items():
+            devices_str = devices_str + f" // {device_id}: {device.name}"    
+        logging.getLogger(APPNAME).debug(devices_str)
+        
         return devices     
 
 
-def refresh_by_device_id(device_id, appinfo, is_charging, battery_level):
+async def get_device_name(device_id):
+    devices = await get_devices()
+    
+    for id, device in devices.items():
+        if id == device_id:
+            return device.name
+    
+    return None
+  
+def track_consecutive_calls(func):
+    last_args = None
+    last_kwargs = None
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        nonlocal last_args, last_kwargs
+        key = (args, tuple(sorted(kwargs.items())))
+        is_repeat = (key == (last_args, last_kwargs))
+        last_args, last_kwargs = args, tuple(sorted(kwargs.items()))
+        
+        # Pass _is_repeat to the decorated function
+        return func(*args, _is_repeat=is_repeat, **kwargs)
+
+    return wrapper
+
+@track_consecutive_calls
+def refresh_by_device_id(device_id, appinfo, is_charging, battery_level, _is_repeat=False):
     
     if device_id not in appinfo.devices:
-        logging.getLogger(APPNAME).debug(f"Refresh called for unknown device_id={device_id}")
+        if not _is_repeat:
+            unknown_name = get_device_name(device_id)
+            logging.getLogger(APPNAME).debug(f"Refresh called for unknown device_id={device_id}, name={unknown_name}")
         return
     
     logging.getLogger(APPNAME).debug(f"device_id={device_id}, appinfo,is_charging={is_charging}, charge={battery_level}")    
@@ -113,7 +146,7 @@ def refresh_by_device_id(device_id, appinfo, is_charging, battery_level):
         
         hover_text = f"{device.name}: {battery_level}%{' (charging)' if is_charging else ''}"
         logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
-        appinfo.systray.update(hover_text,icon=get_icon(battery_level))
+        appinfo.systray.update(get_icon(battery_level), hover_text)
 
 async def handle_monitor_message(response, websocket, appinfo):
     if websocket.closed or response is None:
@@ -201,7 +234,7 @@ async def get_devices_a():
     devices = await get_devices()
     
     if len(devices) == 1:
-        (device_id, device), = devices.items()
+        (_, device), = devices.items()
         device.selected = True
         logging.getLogger(APPNAME).info(f"Selected device: {device.name}")
     else:
@@ -264,7 +297,9 @@ def refresh_by_selected_device(appinfo=None, devices=None, systray=None):
            
             hover_text = f"{device.name}: {device.battery_level}%{' (charging)' if device.is_charging else ''}"
             logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
-            systray.update(hover_text=hover_text, icon=get_icon(device.battery_level))
+            #systray.update(hover_text=hover_text, icon=None)
+            systray.update(get_icon(device.battery_level), hover_text)
+            systray.update(get_icon(device.battery_level), hover_text)
             
 
 def check_socket(address, port):
@@ -315,13 +350,16 @@ if __name__ == "__main__":
         
         try:
             wait_for_ghub()
+            devices = loop.run_until_complete(get_devices_a())
+            appinfo.devices = devices
             refresh_by_selected_device(appinfo=appinfo)
             keep_monitoring = loop.run_until_complete(monitor(appinfo))
             
         except Exception as ex:
             logging.getLogger(APPNAME).error(f"Error: {ex}")
 
-
+        
+        
     systray.shutdown()
     loop.close()
     save_prefs()
