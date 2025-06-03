@@ -132,11 +132,14 @@ def track_consecutive_calls(func):
 @track_consecutive_calls
 def refresh_by_device_id(device_id, appinfo, is_charging, battery_level, _is_repeat=False):
     
-    if device_id not in appinfo.devices:
-        if not _is_repeat:
-            unknown_name = get_device_name(device_id)
-            logging.getLogger(APPNAME).debug(f"Refresh called for unknown device_id={device_id}, name={unknown_name}")
+    if _is_repeat:
+        #logging.getLogger(APPNAME).debug(f"Called again wih the same parameters, skipping refresh for device_id={device_id}")
         return
+
+    if device_id not in appinfo.devices:
+        unknown_name = get_device_name(device_id)
+        logging.getLogger(APPNAME).debug(f"Refresh called for unknown device_id={device_id}, name={unknown_name}")
+
     
     logging.getLogger(APPNAME).debug(f"device_id={device_id}, appinfo,is_charging={is_charging}, charge={battery_level}")    
     device = appinfo.devices[device_id]    
@@ -288,18 +291,21 @@ def refresh_by_selected_device(appinfo=None, devices=None, systray=None):
        
     for device_id, device in devices.items():
         if device.selected:
+            logging.getLogger(APPNAME).debug(f"Selected device: {device.name} (id={device.id})")
             if device.battery_level == -1 or device.battery_level is None:
                 # Fetch the battery level if not already set
                 #level, charging = main_event_loop.run_until_complete(get_battery_level(device.id))
+                logging.getLogger(APPNAME).debug(f"Fetching battery level for device {device.name} (id={device.id})")
                 level, is_charging = asyncio.run(get_battery_level(device.id))                
                 device.battery_level = level
                 device.is_charging = is_charging
+                logging.getLogger(APPNAME).debug(f"Device {device.name} (id={device.id}) has level={level}, charging={is_charging}")
            
             hover_text = f"{device.name}: {device.battery_level}%{' (charging)' if device.is_charging else ''}"
-            logging.getLogger(APPNAME).info(f"appinfo.systray.update(hover_text={hover_text}")
-            #systray.update(hover_text=hover_text, icon=None)
-            systray.update(get_icon(device.battery_level), hover_text)
-            systray.update(get_icon(device.battery_level), hover_text)
+            icon = get_icon(device.battery_level)
+            logging.getLogger(APPNAME).info(f"Updating systray icon={icon}, hover_text={hover_text}")
+            systray.update(icon, hover_text)
+            
             
 
 def check_socket(address, port):
