@@ -10,6 +10,7 @@ DATADIR = f'{os.getenv("APPDATA")}\\{APPNAME}'
 LOG_LEVEL = "DEBUG"
 LOG_FILE = None
 SELECTED_DEVICE_NAME = None
+LEVEL_FILE = None
 logger = None
 
 def init_logging():
@@ -44,7 +45,7 @@ def init_logging():
     
         
 def load_prefs():
-    global DATADIR, LOG_LEVEL, LOG_FILE, SELECTED_DEVICE_NAME, logger
+    global DATADIR, LOG_LEVEL, LOG_FILE, SELECTED_DEVICE_NAME, LEVEL_FILE, logger
     load_dotenv()
     
     if not os.path.exists(DATADIR):
@@ -73,6 +74,9 @@ def load_prefs():
 
         if 'LOG_FILE' in prefs:
             LOG_FILE = prefs['LOG_FILE']
+            
+        if 'LEVEL_FILE' in prefs:
+            LEVEL_FILE = prefs['LEVEL_FILE']
         
     init_logging()
     
@@ -84,7 +88,7 @@ def save_prefs():
     if not config.has_section('PREFS'):
         config.add_section('PREFS')
     
-    config.set('PREFS', 'selected_device', SELECTED_DEVICE_NAME)
+    config.set('PREFS', 'SELECTED_DEVICE_NAME', SELECTED_DEVICE_NAME)
 
     if LOG_FILE != None:
         config.set('PREFS', 'LOG_FILE', LOG_FILE)
@@ -99,6 +103,9 @@ def save_prefs():
     }
     level = switch.get(LOG_LEVEL, "Invalid")
     config.set('PREFS', 'LOG_LEVEL', level)
+
+    if LEVEL_FILE is not None:
+        config.set('PREFS', 'LEVEL_FILE', LEVEL_FILE)
     
     with open(f'{DATADIR}\\config.ini', 'w') as configfile:
         config.write(configfile)

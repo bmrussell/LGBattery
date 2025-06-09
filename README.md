@@ -5,7 +5,7 @@ System tray battery indicator for Windows Logitech devices. BECAUSE LOGITECH WON
 ![Screenshot](tray-screenshot.png)
 
 ## WHAT ITS DOING
-It uses the Python websockets library to watch for battery changed notifications from LG Hub - yeah, sorry, you'll still need that.
+It uses the Python web sockets library to watch for battery changed notifications from LG Hub - yeah, sorry, you'll still need that.
 
 It puts an icon in the system tray after extracting the battery level icons it needs from `C:\Windows\SystemResources\wpdshext.dll.mun` These are saved in `%APPDATA%\lgbattery`.
 
@@ -15,17 +15,17 @@ Battery level is shown as a tooltip on the system tray icon which also changes d
 
 After that it'll save the selected device in `%APPDATA%\lgbattery\config.ini` so it'll pick it up on restart.
 
-if you want, you can add a `level_file` entry to the prefs. This will cause the battery level to be written to that file, in case you want to display it in 72pt **Trebuchet MS** on the desktop using the ([now dead](https://en.wikipedia.org/wiki/Samurize)) Samurize or something.
+if you want, you can add a `LEVEL_FILE` entry to the prefs. This will cause the battery level to be written to that file, in case you want to display it in 72pt **Trebuchet MS** on the desktop using the ([now dead](https://en.wikipedia.org/wiki/Samurize)) Samurize or something.
 
 ## PREFERENCES
 Preferences are stored in `%APPDATA%\lgbattery\config.ini` as a regular INI file. entries are as follows, under the `[PREFS]` section.
 
 |Name|Description|
 |--|--|
-|`selected_device`|Logitech ID for the device being monitored. Updated by the application when item selected from system tray rigt click|
-|`level_file`|Full path to a text file that the application will create/update when the battery level changes|
-|`log_level`|One of `DEBUG`, `INFO`, `WARNING` (default), `ERROR` or `CRITICAL` affecting the verbosity of logging.|
-|`log_file`|File name (no path) for a text file to receive the logging output. File is created in `%APPDATA%\lgbattery`. If not present, logging is done to console.|
+|`SELECTED_DEVICE`|Logitech ID for the device being monitored. Updated by the application when item selected from system tray right click|
+|`LEVEL_FILE`|Full path to a text file that the application will create/update when the battery level changes|
+|`LOG_LEVEL`|One of `DEBUG`, `INFO`, `WARNING` (default), `ERROR` or `CRITICAL` affecting the verbosity of logging.|
+|`LOG_FILE`|File name (no path) for a text file to receive the logging output. File is created in `%APPDATA%\lgbattery`. If not present, logging is done to console.|
 
 ## IMPROVEMENTS
 - The selected device is not ticked (checked: US) when selected. This is a limitation of the `infi.systray` library so if they add that functionality there I'll update this program.
